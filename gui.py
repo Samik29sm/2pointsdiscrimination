@@ -1,6 +1,7 @@
 """Tkinter GUI for the Two-Point Discrimination Experiment tool."""
 
 import tkinter as tk
+from datetime import date
 from tkinter import filedialog, messagebox, ttk
 from typing import List, Optional
 
@@ -67,13 +68,14 @@ class App(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title("Two-Point Discrimination Experiment")
-        self.geometry("860x640")
+        self.geometry("860x700")
         self.configure(bg=BG)
         self.resizable(True, True)
-        self.minsize(720, 540)
+        self.minsize(720, 580)
 
         self.data_manager = DataManager()
         self.session: Optional[ExperimentSession] = None
+        self.csv_save_path: Optional[str] = None
 
         self._container = tk.Frame(self, bg=BG)
         self._container.pack(fill=tk.BOTH, expand=True)
@@ -94,12 +96,13 @@ class App(tk.Tk):
     def show_setup(self) -> None:
         self._replace(SetupFrame(self._container, self))
 
-    def show_trial(self, session: ExperimentSession) -> None:
+    def show_trial(self, session: ExperimentSession, csv_save_path: str) -> None:
         self.session = session
-        self._replace(TrialFrame(self._container, self, session))
+        self.csv_save_path = csv_save_path
+        self._replace(TrialFrame(self._container, self, session, csv_save_path))
 
-    def show_results(self, session: ExperimentSession) -> None:
-        self._replace(ResultsFrame(self._container, self, session))
+    def show_results(self, session: ExperimentSession, csv_save_path: str) -> None:
+        self._replace(ResultsFrame(self._container, self, session, csv_save_path))
 
 
 # ===========================================================================
@@ -107,11 +110,12 @@ class App(tk.Tk):
 # ===========================================================================
 
 class SetupFrame(tk.Frame):
-    """Initial screen: participant ID, location, distances."""
+    """Initial screen: participant ID, testing day, location, distances, CSV path."""
 
     def __init__(self, parent: tk.Widget, app: App) -> None:
         super().__init__(parent, bg=BG)
         self.app = app
+        self._csv_path: str = ""
         self._build()
 
     def _build(self) -> None:
@@ -137,9 +141,13 @@ class SetupFrame(tk.Frame):
         body = tk.Frame(self, bg=BG, padx=PAD * 2, pady=PAD)
         body.pack(fill=tk.BOTH, expand=True)
 
-        # Participant ID
-        pid_panel = _panel(body)
-        pid_panel.pack(fill=tk.X, pady=(PAD, 6))
+        # ---- Row 1: Participant ID + Test Date ----
+        row1 = tk.Frame(body, bg=BG)
+        row1.pack(fill=tk.X, pady=(PAD, 6))
+
+        # Participant ID (left)
+        pid_panel = _panel(row1)
+        pid_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, PAD // 2))
         _make_label(pid_panel, "Participant ID", font=FONT_SUBHEAD).pack(anchor="w", padx=PAD, pady=(PAD, 2))
         self._pid_var = tk.StringVar()
         pid_entry = tk.Entry(
@@ -148,8 +156,35 @@ class SetupFrame(tk.Frame):
         )
         pid_entry.pack(fill=tk.X, padx=PAD, pady=(0, PAD))
         pid_entry.focus_set()
+        self._pid_var.trace_add("write", self._on_pid_change)
 
-        # Location selection
+        # Test Date (right — auto-filled, read-only)
+        date_panel = _panel(row1)
+        date_panel.pack(side=tk.LEFT, fill=tk.BOTH, padx=(PAD // 2, 0))
+        _make_label(date_panel, "Test Date", font=FONT_SUBHEAD).pack(anchor="w", padx=PAD, pady=(PAD, 2))
+        self._date_var = tk.StringVar(value=date.today().isoformat())
+        tk.Entry(
+            date_panel, textvariable=self._date_var, font=FONT_BODY,
+            relief=tk.SOLID, bd=1, state="readonly", width=14
+        ).pack(padx=PAD, pady=(0, PAD))
+
+        # ---- Row 2: Testing Day Nr. ----
+        day_panel = _panel(body)
+        day_panel.pack(fill=tk.X, pady=6)
+        day_inner = tk.Frame(day_panel, bg=PANEL_BG)
+        day_inner.pack(fill=tk.X, padx=PAD, pady=PAD)
+        _make_label(day_inner, "Testing Day Nr.", font=FONT_SUBHEAD).pack(side=tk.LEFT)
+        self._day_nr_var = tk.IntVar(value=1)
+        tk.Spinbox(
+            day_inner, from_=1, to=999, textvariable=self._day_nr_var,
+            font=FONT_BODY, width=5, relief=tk.SOLID, bd=1
+        ).pack(side=tk.LEFT, padx=(PAD, 0))
+        self._day_hint = tk.Label(
+            day_inner, text="", font=FONT_SMALL, fg="#7f8c8d", bg=PANEL_BG
+        )
+        self._day_hint.pack(side=tk.LEFT, padx=(PAD, 0))
+
+        # ---- Row 3: Location selection ----
         loc_panel = _panel(body)
         loc_panel.pack(fill=tk.X, pady=6)
         _make_label(loc_panel, "Body Location", font=FONT_SUBHEAD).pack(anchor="w", padx=PAD, pady=(PAD, 2))
@@ -180,7 +215,7 @@ class SetupFrame(tk.Frame):
             font=FONT_SMALL, fg="#7f8c8d", bg=PANEL_BG, anchor="w"
         ).pack(fill=tk.X, padx=PAD, pady=(0, PAD))
 
-        # Distances
+        # ---- Row 4: Distances ----
         dist_panel = _panel(body)
         dist_panel.pack(fill=tk.X, pady=6)
         dist_header = tk.Frame(dist_panel, bg=PANEL_BG)
@@ -200,7 +235,23 @@ class SetupFrame(tk.Frame):
             font=FONT_SMALL, fg="#7f8c8d", bg=PANEL_BG, anchor="w"
         ).pack(fill=tk.X, padx=PAD, pady=(0, PAD))
 
-        # Start button
+        # ---- Row 5: CSV Save Path ----
+        csv_panel = _panel(body)
+        csv_panel.pack(fill=tk.X, pady=6)
+        _make_label(csv_panel, "CSV Save Path", font=FONT_SUBHEAD).pack(anchor="w", padx=PAD, pady=(PAD, 2))
+        csv_row = tk.Frame(csv_panel, bg=PANEL_BG)
+        csv_row.pack(fill=tk.X, padx=PAD, pady=(0, PAD))
+        self._csv_path_var = tk.StringVar(value="(not selected)")
+        tk.Label(
+            csv_row, textvariable=self._csv_path_var,
+            font=FONT_SMALL, fg="#555", bg=PANEL_BG, anchor="w", wraplength=480
+        ).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        _make_button(
+            csv_row, "Browse…", self._browse_csv,
+            bg=ACCENT, pady=4
+        ).pack(side=tk.RIGHT, padx=(PAD, 0))
+
+        # ---- Start button ----
         _make_button(
             body, "▶  Start Experiment", self._start,
             bg=SUCCESS, font=FONT_HEADING, pady=12
@@ -209,6 +260,17 @@ class SetupFrame(tk.Frame):
         self._refresh_location()
 
     # ------------------------------------------------------------------
+
+    def _on_pid_change(self, *_) -> None:
+        """Auto-update testing day number when participant ID changes."""
+        pid = self._pid_var.get().strip()
+        if pid:
+            suggested = self.app.data_manager.get_next_testing_day_nr(pid)
+            self._day_nr_var.set(suggested)
+            self._day_hint.config(text=f"(auto-detected: {suggested})")
+        else:
+            self._day_nr_var.set(1)
+            self._day_hint.config(text="")
 
     def _on_location_change(self, _event=None) -> None:
         self._refresh_location()
@@ -280,6 +342,23 @@ class SetupFrame(tk.Frame):
         self._loc_var.set(name)
         self._refresh_location()
 
+    def _browse_csv(self) -> None:
+        pid = self._pid_var.get().strip() or "participant"
+        loc = self._loc_var.get().replace(" ", "_")
+        today = self._date_var.get()
+        day_nr = self._day_nr_var.get()
+        suggested = f"{pid}_{loc}_{today}_day{day_nr}.csv"
+        filepath = filedialog.asksaveasfilename(
+            parent=self,
+            title="Choose CSV save location",
+            defaultextension=".csv",
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
+            initialfile=suggested,
+        )
+        if filepath:
+            self._csv_path = filepath
+            self._csv_path_var.set(filepath)
+
     def _start(self) -> None:
         pid = self._pid_var.get().strip()
         if not pid:
@@ -288,8 +367,21 @@ class SetupFrame(tk.Frame):
         if not self._distances:
             messagebox.showwarning("Distances", "No distances defined for this location.", parent=self)
             return
-        session = ExperimentSession(pid, self._loc_var.get(), self._distances)
-        self.app.show_trial(session)
+        if not self._csv_path:
+            messagebox.showwarning(
+                "CSV Save Path",
+                "Please select a CSV file path before starting the experiment.",
+                parent=self,
+            )
+            return
+        session = ExperimentSession(
+            pid,
+            self._loc_var.get(),
+            self._distances,
+            testing_day_nr=self._day_nr_var.get(),
+            test_date=self._date_var.get(),
+        )
+        self.app.show_trial(session, self._csv_path)
 
 
 # ===========================================================================
@@ -299,10 +391,11 @@ class SetupFrame(tk.Frame):
 class TrialFrame(tk.Frame):
     """Main experiment screen shown during data collection."""
 
-    def __init__(self, parent: tk.Widget, app: App, session: ExperimentSession) -> None:
+    def __init__(self, parent: tk.Widget, app: App, session: ExperimentSession, csv_save_path: str) -> None:
         super().__init__(parent, bg=BG)
         self.app = app
         self.session = session
+        self._csv_save_path = csv_save_path
         self._build()
         self._refresh()
 
@@ -425,9 +518,12 @@ class TrialFrame(tk.Frame):
         )
         self._progress_label.pack(side=tk.LEFT)
 
-        _make_button(
-            footer, "✕  Cancel", self._cancel,
-            bg=DANGER, pady=4
+        tk.Label(
+            footer,
+            text="🔒 Experiment in progress — please complete all trials",
+            font=FONT_SMALL,
+            fg=WARN,
+            bg=BG,
         ).pack(side=tk.RIGHT)
 
     # ------------------------------------------------------------------
@@ -504,17 +600,12 @@ class TrialFrame(tk.Frame):
         self.session.record_response(response, custom_distance=custom)
 
         if self.session.done:
-            self.app.show_results(self.session)
+            self.app.show_results(self.session, self._csv_save_path)
         else:
             self._use_custom.set(False)
             self._custom_dist_var.set("")
             self._custom_entry.config(state=tk.DISABLED)
             self._refresh()
-
-    def _cancel(self) -> None:
-        if messagebox.askyesno("Cancel", "Cancel the experiment and return to setup?", parent=self):
-            self.app.show_setup()
-
 
 # ===========================================================================
 # Results frame
@@ -523,11 +614,13 @@ class TrialFrame(tk.Frame):
 class ResultsFrame(tk.Frame):
     """Results screen shown when the experiment is complete."""
 
-    def __init__(self, parent: tk.Widget, app: App, session: ExperimentSession) -> None:
+    def __init__(self, parent: tk.Widget, app: App, session: ExperimentSession, csv_save_path: str) -> None:
         super().__init__(parent, bg=BG)
         self.app = app
         self.session = session
         self.data_manager = DataManager()
+        self._csv_save_path = csv_save_path
+        self._auto_saved_csv: Optional[str] = None
         self._build()
 
     def _build(self) -> None:
@@ -598,6 +691,8 @@ class ResultsFrame(tk.Frame):
         stats_grid.pack(fill=tk.X, padx=PAD, pady=(0, PAD))
 
         stats_items = [
+            ("Test Date",            summary["test_date"]),
+            ("Testing Day Nr.",      summary["testing_day_nr"]),
             ("Total trials",         summary["total_trials"]),
             ("Experimental trials",  summary["experimental_trials"]),
             ("Control trials",       summary["control_trials"]),
@@ -650,11 +745,37 @@ class ResultsFrame(tk.Frame):
 
         self._build_graph(graph_panel, summary)
 
-        # ---------- export buttons ----------
+        # ---------- auto-save CSV ----------
+        try:
+            self._auto_saved_csv = self.data_manager.export_csv(
+                self.session, self._csv_save_path
+            )
+            csv_status_bg = "#d5f5e3"
+            csv_status_text = f"✓  CSV saved to: {self._auto_saved_csv}"
+            csv_status_fg = SUCCESS
+        except OSError as exc:
+            csv_status_bg = "#fdecea"
+            csv_status_text = f"⚠  Could not save CSV: {exc}"
+            csv_status_fg = DANGER
+
+        csv_info = tk.Frame(inner, bg=csv_status_bg, relief=tk.FLAT, bd=0)
+        csv_info.pack(fill=tk.X, pady=(0, PAD))
+        tk.Label(
+            csv_info,
+            text=csv_status_text,
+            font=FONT_SMALL,
+            fg=csv_status_fg,
+            bg=csv_status_bg,
+            anchor="w",
+            wraplength=700,
+            padx=PAD,
+            pady=8,
+        ).pack(fill=tk.X)
+
+        # ---------- action buttons ----------
         export_panel = tk.Frame(inner, bg=BG)
         export_panel.pack(fill=tk.X, pady=(0, PAD))
 
-        _make_button(export_panel, "⬇  Export CSV", self._export_csv, bg=ACCENT).pack(side=tk.LEFT, padx=(0, PAD))
         _make_button(export_panel, "⬇  Export JSON", self._export_json, bg=PRIMARY).pack(side=tk.LEFT, padx=(0, PAD))
         _make_button(export_panel, "↩  New Experiment", self.app.show_setup, bg=WARN).pack(side=tk.RIGHT)
 
@@ -712,22 +833,6 @@ class ResultsFrame(tk.Frame):
         plt.close(fig)
 
     # ------------------------------------------------------------------
-
-    def _export_csv(self) -> None:
-        filepath = filedialog.asksaveasfilename(
-            parent=self,
-            title="Save CSV",
-            defaultextension=".csv",
-            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
-            initialfile=f"{self.session.participant_id}_{self.session.location}.csv",
-        )
-        if not filepath:
-            return
-        try:
-            saved = self.data_manager.export_csv(self.session, filepath)
-            messagebox.showinfo("Saved", f"CSV saved to:\n{saved}", parent=self)
-        except OSError as exc:
-            messagebox.showerror("Error", str(exc), parent=self)
 
     def _export_json(self) -> None:
         filepath = filedialog.asksaveasfilename(

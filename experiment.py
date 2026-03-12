@@ -63,9 +63,13 @@ class ExperimentSession:
         participant_id: str,
         location: str,
         distances: List[float],
+        testing_day_nr: int = 1,
+        test_date: Optional[str] = None,
     ) -> None:
         self.participant_id = participant_id
         self.location = location
+        self.testing_day_nr = testing_day_nr
+        self.test_date = test_date if test_date is not None else datetime.now().strftime("%Y-%m-%d")
         self.start_time = datetime.now().isoformat()
 
         # Ascending, unique distance list
@@ -193,6 +197,8 @@ class ExperimentSession:
         return {
             "participant_id": self.participant_id,
             "location": self.location,
+            "test_date": self.test_date,
+            "testing_day_nr": self.testing_day_nr,
             "threshold_mm": self.threshold,
             "total_trials": len(self.trials),
             "experimental_trials": len(experimental),
