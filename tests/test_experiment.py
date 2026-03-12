@@ -301,3 +301,143 @@ class TestDataManagerDayNr:
             assert rows[0]["test_date"] == "2025-06-01"
             assert rows[0]["testing_day_nr"] == "2"
             assert rows[0]["location"] == "Fingertip"
+
+
+# ---------------------------------------------------------------------------
+# DataManager – new multi-location CSV methods
+# ---------------------------------------------------------------------------
+
+class TestDataManagerMultiLocationCSV:
+    def _make_session(self, pid="P01", loc="Fingertip", distances=None, day_nr=1):
+        if distances is None:
+            distances = [4, 6, 8]
+        s = ExperimentSession(pid, loc, distances, testing_day_nr=day_nr, test_date="2025-06-01")
+        s._ct_trial_numbers = set()
+        s._pending_ct = 0
+        return s
+
+    # -- make_experiment_filepath --
+
+    def test_make_experiment_filepath_format(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            dm = DataManager(data_dir=tmpdir)
+            path = dm.make_experiment_filepath("P01", 3, "2025-06-01")
+            assert path.endswith("P01_day3_2025-06-01.csv")
+            assert path.startswith(tmpdir)
+
+    def test_make_experiment_filepath_sanitises_pid(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            dm = DataManager(data_dir=tmpdir)
+            path = dm.make_experiment_filepath("P 01/x", 1, "2025-01-01")
+            basename = os.path.basename(path)
+            assert "/" not in basename
+            assert " " not in basename
+
+    # -- init_csv --
+
+    def test_init_csv_creates_file_with_headers(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            dm = DataManager(data_dir=tmpdir)
+            fp = os.path.join(tmpdir, "out.csv")
+            dm.init_csv(fp)
+            assert os.path.isfile(fp)
+            import csv as csv_mod
+            with open(fp, newline="", encoding="utf-8") as fh:
+                reader = csv_mod.DictReader(fh)
+                assert set(reader.fieldnames or []) == {
+                    "participant_id", "test_date", "testing_day_nr", "location",
+                    "trial_number", "trial_type", "distance_mm", "stimulus_applied",
+                    "response", "correct", "timestamp",
+                }
+                rows = list(reader)
+            assert rows == []
+
+    def test_init_csv_creates_parent_directory(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            dm = DataManager(data_dir=tmpdir)
+            fp = os.path.join(tmpdir, "subdir", "out.csv")
+            dm.init_csv(fp)
+            assert os.path.isfile(fp)
+
+    # -- append_trial_row --
+
+    def test_append_trial_row_writes_one_row(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            dm = DataManager(data_dir=tmpdir)
+            fp = os.path.join(tmpdir, "out.csv")
+            dm.init_csv(fp)
+            s = self._make_session()
+            s.record_response("2")
+            dm.append_trial_row(s, s.trials[-1], fp)
+            import csv as csv_mod
+            with open(fp, newline="", encoding="utf-8") as fh:
+                rows = list(csv_mod.DictReader(fh))
+            assert len(rows) == 1
+            assert rows[0]["location"] == "Fingertip"
+            assert rows[0]["participant_id"] == "P01"
+            assert rows[0]["response"] == "2"
+
+    def test_append_trial_row_accumulates_rows(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            dm = DataManager(data_dir=tmpdir)
+            fp = os.path.join(tmpdir, "out.csv")
+            dm.init_csv(fp)
+            s = self._make_session()
+            for resp in ["2", "2", "1"]:
+                s.record_response(resp)
+                dm.append_trial_row(s, s.trials[-1], fp)
+            import csv as csv_mod
+            with open(fp, newline="", encoding="utf-8") as fh:
+                rows = list(csv_mod.DictReader(fh))
+            assert len(rows) == 3
+
+    # -- write_final_csv --
+
+    def test_write_final_csv_has_summary_section(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            dm = DataManager(data_dir=tmpdir)
+            s1 = self._make_session(loc="Fingertip")
+            s2 = self._make_session(loc="Palm", distances=[5, 10, 15, 20])
+            s1.threshold = 6.0
+            s2.threshold = 10.0
+            fp = os.path.join(tmpdir, "final.csv")
+            dm.write_final_csv([s1, s2], fp)
+            with open(fp, newline="", encoding="utf-8") as fh:
+                content = fh.read()
+            assert "SUMMARY" in content
+            assert "Fingertip" in content
+            assert "Palm" in content
+            assert "6.0" in content
+            assert "10.0" in content
+
+    def test_write_final_csv_has_per_location_sections(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            dm = DataManager(data_dir=tmpdir)
+            s1 = self._make_session(loc="Fingertip")
+            s1.record_response("2")
+            s2 = self._make_session(loc="Palm", distances=[5, 10, 15, 20])
+            s2.record_response("2")
+            fp = os.path.join(tmpdir, "final.csv")
+            dm.write_final_csv([s1, s2], fp)
+            with open(fp, newline="", encoding="utf-8") as fh:
+                content = fh.read()
+            assert "LOCATION: Fingertip" in content
+            assert "LOCATION: Palm" in content
+
+    def test_write_final_csv_shows_na_for_missing_threshold(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            dm = DataManager(data_dir=tmpdir)
+            s = self._make_session()
+            fp = os.path.join(tmpdir, "final.csv")
+            dm.write_final_csv([s], fp)
+            with open(fp, newline="", encoding="utf-8") as fh:
+                content = fh.read()
+            assert "N/A" in content
+
+    def test_write_final_csv_returns_filepath(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            dm = DataManager(data_dir=tmpdir)
+            s = self._make_session()
+            fp = os.path.join(tmpdir, "final.csv")
+            result = dm.write_final_csv([s], fp)
+            assert result == fp
