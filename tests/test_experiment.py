@@ -1,11 +1,13 @@
 """Unit tests for experiment.py logic."""
 
+import bisect
 import os
 import tempfile
 
 import pytest
 from data_manager import DataManager
 from experiment import ExperimentSession, Trial
+from locations import BODY_LOCATIONS
 
 
 # ---------------------------------------------------------------------------
@@ -276,9 +278,17 @@ class TestControlTrials:
     def test_ct_positions_within_estimated_range(self):
         """Both CT positions should fall within [3 .. max_pool]."""
         for _ in range(30):
-            s = ExperimentSession("P01", "Palm", [1, 5, 10, 15, 20, 25, 30, 40])
+            distances = [1, 5, 10, 15, 20, 25, 30, 40]
+            s = ExperimentSession("P01", "Palm", distances)
             n = len(s.distances)
-            avg_threshold_idx = n // 2
+            # Mirror the index-computation logic in _generate_ct_positions.
+            loc_data = BODY_LOCATIONS.get("Palm", {})
+            avg_threshold_mm = loc_data.get("average_threshold")
+            if avg_threshold_mm is not None:
+                idx = bisect.bisect_left(s.distances, float(avg_threshold_mm))
+                avg_threshold_idx = min(idx, n - 1)
+            else:
+                avg_threshold_idx = n // 2
             steps_down = max((n - 1) - avg_threshold_idx, 1)
             estimated_total = steps_down + ExperimentSession.REVERSAL_THRESHOLD * 2 + 3
             max_pool = max(estimated_total, 10)

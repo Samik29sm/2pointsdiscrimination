@@ -567,13 +567,15 @@ class TrialFrame(tk.Frame):
         )
         self._location_label.pack(pady=(4, 0))
 
-        # Location description — shown below the body part name
+        # Location description — shown below the body part name (wraps if long)
         self._location_desc_label = tk.Label(
             trial_panel,
             text="",
             font=FONT_BODY,
             fg="#555",
             bg=PANEL_BG,
+            wraplength=700,
+            justify=tk.CENTER,
         )
         self._location_desc_label.pack(pady=(2, 0))
 
