@@ -664,6 +664,21 @@ class TrialFrame(tk.Frame):
         self.bind_all("<Return>", lambda _e: _kb_respond("2"))
         self.bind_all("<space>", lambda _e: _kb_respond("1"))
 
+        # Experimenter control: request an extra control trial
+        extra_ct_row = tk.Frame(trial_panel, bg=PANEL_BG)
+        extra_ct_row.pack(pady=(0, PAD))
+
+        self._add_ct_btn = _make_button(
+            extra_ct_row,
+            "➕  Add CT Next Trial",
+            self._add_extra_ct,
+            bg=CT_COLOR,
+            font=FONT_SMALL,
+            pady=4,
+            padx=12,
+        )
+        self._add_ct_btn.pack()
+
         # ---------- footer ----------
         footer = tk.Frame(self, bg=BG, padx=PAD * 2, pady=6)
         footer.pack(fill=tk.X)
@@ -722,6 +737,11 @@ class TrialFrame(tk.Frame):
 
         self._trial_num_label.config(text=f"Trial #{trial_num}")
 
+        # Enable/disable the Add CT button
+        # Disabled during a CT (already running one) or when the session is done
+        ct_btn_state = tk.DISABLED if (is_ct or s.done) else tk.NORMAL
+        self._add_ct_btn.config(state=ct_btn_state)
+
         # Progress info
         reversals = s.single_point_counts
         rev_str = "  |  ".join(
@@ -738,6 +758,11 @@ class TrialFrame(tk.Frame):
         else:
             self._custom_entry.config(state=tk.DISABLED)
             self._custom_dist_var.set("")
+
+    def _add_extra_ct(self) -> None:
+        """Request an extra control trial to run before the next experimental trial."""
+        self.session.request_extra_control_trial()
+        self._refresh()
 
     def _respond(self, response: str) -> None:
         custom: Optional[float] = None
