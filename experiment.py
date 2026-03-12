@@ -65,10 +65,12 @@ class ExperimentSession:
         distances: List[float],
         testing_day_nr: int = 1,
         test_date: Optional[str] = None,
+        experiment_session: int = 1,
     ) -> None:
         self.participant_id = participant_id
         self.location = location
         self.testing_day_nr = testing_day_nr
+        self.experiment_session = experiment_session
         self.test_date = test_date if test_date is not None else datetime.now().strftime("%Y-%m-%d")
         self.start_time = datetime.now().isoformat()
 
@@ -90,6 +92,8 @@ class ExperimentSession:
         # Control trial scheduling
         self._pending_ct = self.NUM_CONTROL_TRIALS
         self._ct_trial_numbers: set = self._generate_ct_positions()
+        # Set when the staircase threshold is found but CTs have not yet finished
+        self._threshold_determined: bool = False
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -116,6 +120,9 @@ class ExperimentSession:
 
     @property
     def is_next_trial_control(self) -> bool:
+        # After the staircase threshold is found, force-run remaining CTs
+        if self._threshold_determined and self._pending_ct > 0:
+            return True
         return (
             self.current_trial_number in self._ct_trial_numbers
             and self._pending_ct > 0
@@ -165,6 +172,9 @@ class ExperimentSession:
             trial.response = response
             self.trials.append(trial)
             self._pending_ct -= 1
+            # If the staircase already determined the threshold, finish now
+            if self._threshold_determined and self._pending_ct == 0:
+                self.done = True
 
         else:
             # If a custom distance is provided, add it to the list and point there
@@ -234,7 +244,11 @@ class ExperimentSession:
                     self.threshold = self.distances[idx + 1]
                 else:
                     self.threshold = self.distances[idx]
-                self.done = True
+                # Only mark done if all control trials are already completed
+                if self._pending_ct == 0:
+                    self.done = True
+                else:
+                    self._threshold_determined = True
                 return
 
             # Move up one step (back towards higher distances)

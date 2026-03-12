@@ -200,6 +200,34 @@ class TestControlTrials:
         s.record_response("2")
         assert s._pending_ct == 0
 
+    def test_experiment_does_not_end_before_two_cts(self):
+        """Staircase threshold does not mark done if CTs are still pending."""
+        s = ExperimentSession("P01", "Loc", [5.0])
+        # Leave the 2 CTs pending; the staircase will hit threshold first
+        s._ct_trial_numbers = set()  # no scheduled CT positions yet
+        s._pending_ct = 2
+        # Trigger 3 reversals at 5 mm (the only distance)
+        for _ in range(3):
+            s.record_response("1")
+        # Threshold determined but not done yet – 2 CTs remain
+        assert not s.done
+        assert s._threshold_determined
+        assert s.threshold == 5.0
+        # Complete the 2 remaining control trials
+        s.record_response("1")  # CT #1
+        assert not s.done
+        s.record_response("1")  # CT #2
+        assert s.done
+
+    def test_experiment_ends_immediately_when_cts_already_done(self):
+        """If all CTs are already done, threshold detection marks done immediately."""
+        s = ExperimentSession("P01", "Loc", [5.0])
+        s._ct_trial_numbers = set()
+        s._pending_ct = 0
+        for _ in range(3):
+            s.record_response("1")
+        assert s.done
+
 
 # ---------------------------------------------------------------------------
 # ExperimentSession – summary
@@ -256,6 +284,14 @@ class TestSessionMetadata:
         summary = s.get_summary()
         assert summary["test_date"] == "2025-06-01"
         assert summary["testing_day_nr"] == 2
+
+    def test_default_experiment_session(self):
+        s = ExperimentSession("P01", "Fingertip", [2, 4])
+        assert s.experiment_session == 1
+
+    def test_custom_experiment_session(self):
+        s = ExperimentSession("P01", "Fingertip", [2, 4], experiment_session=2)
+        assert s.experiment_session == 2
 
 
 # ---------------------------------------------------------------------------
@@ -321,14 +357,14 @@ class TestDataManagerMultiLocationCSV:
     def test_make_experiment_filepath_format(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             dm = DataManager(data_dir=tmpdir)
-            path = dm.make_experiment_filepath("P01", 3, "2025-06-01")
-            assert path.endswith("P01_day3_2025-06-01.csv")
+            path = dm.make_experiment_filepath("P01", 1, 3, "2025-06-01")
+            assert path.endswith("P01_session1_day3_2025-06-01.csv")
             assert path.startswith(tmpdir)
 
     def test_make_experiment_filepath_sanitises_pid(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             dm = DataManager(data_dir=tmpdir)
-            path = dm.make_experiment_filepath("P 01/x", 1, "2025-01-01")
+            path = dm.make_experiment_filepath("P 01/x", 1, 1, "2025-01-01")
             basename = os.path.basename(path)
             assert "/" not in basename
             assert " " not in basename
@@ -441,3 +477,45 @@ class TestDataManagerMultiLocationCSV:
             fp = os.path.join(tmpdir, "final.csv")
             result = dm.write_final_csv([s], fp)
             assert result == fp
+
+    def test_write_final_csv_has_experiment_info_section(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            dm = DataManager(data_dir=tmpdir)
+            s = self._make_session()
+            s.experiment_session = 2
+            fp = os.path.join(tmpdir, "final.csv")
+            dm.write_final_csv([s], fp)
+            with open(fp, newline="", encoding="utf-8") as fh:
+                content = fh.read()
+            assert "EXPERIMENT INFO" in content
+            assert "participant_id" in content
+            assert "test_date" in content
+            assert "experiment_session" in content
+            assert "testing_day_nr" in content
+            assert "P01" in content
+            assert "2025-06-01" in content
+
+    def test_write_final_csv_location_columns_restricted(self):
+        """Per-location sections should only contain the required columns."""
+        import csv as csv_mod
+        with tempfile.TemporaryDirectory() as tmpdir:
+            dm = DataManager(data_dir=tmpdir)
+            s = self._make_session()
+            s.record_response("2")
+            fp = os.path.join(tmpdir, "final.csv")
+            dm.write_final_csv([s], fp)
+            with open(fp, newline="", encoding="utf-8") as fh:
+                content = fh.read()
+            # Find the header row after the LOCATION marker
+            lines = content.splitlines()
+            header_fields = None
+            for i, line in enumerate(lines):
+                if line.startswith("LOCATION:") and i + 1 < len(lines):
+                    header_fields = next(csv_mod.reader([lines[i + 1]]))
+                    break
+            assert header_fields is not None
+            required = {"trial_number", "trial_type", "distance_mm",
+                        "stimulus_applied", "response", "correct"}
+            assert set(header_fields) == required
+            assert "timestamp" not in header_fields
+            assert "participant_id" not in header_fields

@@ -12,8 +12,9 @@ from locations import BODY_LOCATIONS, DEFAULT_LOCATION
 # ---------------------------------------------------------------------------
 # Theme constants
 # ---------------------------------------------------------------------------
-FONT_TITLE   = ("Helvetica", 20, "bold")
-FONT_HEADING = ("Helvetica", 15, "bold")
+FONT_TITLE    = ("Helvetica", 20, "bold")
+FONT_LOCATION = ("Helvetica", 22, "bold")
+FONT_HEADING  = ("Helvetica", 15, "bold")
 FONT_SUBHEAD = ("Helvetica", 13, "bold")
 FONT_BODY    = ("Helvetica", 12)
 FONT_SMALL   = ("Helvetica", 10)
@@ -82,6 +83,7 @@ class App(tk.Tk):
         self._location_queue: List[str] = []
         self._current_location_idx: int = 0
         self._setup_pid: str = ""
+        self._setup_session_nr: int = 1
         self._setup_day_nr: int = 1
         self._setup_test_date: str = ""
 
@@ -115,6 +117,7 @@ class App(tk.Tk):
     def start_experiment(
         self,
         pid: str,
+        session_nr: int,
         day_nr: int,
         test_date: str,
         locations: List[str],
@@ -125,6 +128,7 @@ class App(tk.Tk):
         self._location_queue = list(locations)
         self._current_location_idx = 0
         self._setup_pid = pid
+        self._setup_session_nr = session_nr
         self._setup_day_nr = day_nr
         self._setup_test_date = test_date
         self.csv_save_path = csv_path
@@ -153,6 +157,7 @@ class App(tk.Tk):
             distances,
             testing_day_nr=self._setup_day_nr,
             test_date=self._setup_test_date,
+            experiment_session=self._setup_session_nr,
         )
         self.show_trial(session, self.csv_save_path)
 
@@ -257,7 +262,7 @@ class SetupFrame(tk.Frame):
 
         exp_panel = _panel(row2)
         exp_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, PAD // 2))
-        _make_label(exp_panel, "Experiment Type", font=FONT_SUBHEAD).pack(
+        _make_label(exp_panel, "Experiment session", font=FONT_SUBHEAD).pack(
             anchor="w", padx=PAD, pady=(PAD, 4)
         )
         self._exp_type_var = tk.StringVar(value="first")
@@ -265,7 +270,7 @@ class SetupFrame(tk.Frame):
         exp_radio_frame.pack(fill=tk.X, padx=PAD, pady=(0, PAD))
         tk.Radiobutton(
             exp_radio_frame,
-            text="1st 2PD experiment (default: Day 1)",
+            text="1st 2PD experiment",
             variable=self._exp_type_var,
             value="first",
             bg=PANEL_BG,
@@ -274,7 +279,7 @@ class SetupFrame(tk.Frame):
         ).pack(anchor="w")
         tk.Radiobutton(
             exp_radio_frame,
-            text="2nd 2PD experiment (default: Day 8)",
+            text="2nd 2PD experiment",
             variable=self._exp_type_var,
             value="second",
             bg=PANEL_BG,
@@ -405,8 +410,9 @@ class SetupFrame(tk.Frame):
             pid = self._pid_var.get().strip() or "participant"
             day_nr = self._day_nr_var.get()
             today = self._date_var.get()
+            session_nr = 1 if self._exp_type_var.get() == "first" else 2
             filepath = self.app.data_manager.make_experiment_filepath(
-                pid, day_nr, today
+                pid, session_nr, day_nr, today
             )
             self._csv_path_var.set(filepath)
 
@@ -414,7 +420,8 @@ class SetupFrame(tk.Frame):
         pid = self._pid_var.get().strip() or "participant"
         today = self._date_var.get()
         day_nr = self._day_nr_var.get()
-        suggested = f"{pid}_day{day_nr}_{today}.csv"
+        session_nr = 1 if self._exp_type_var.get() == "first" else 2
+        suggested = f"{pid}_session{session_nr}_day{day_nr}_{today}.csv"
         filepath = filedialog.asksaveasfilename(
             parent=self,
             title="Choose CSV save location",
@@ -473,8 +480,10 @@ class SetupFrame(tk.Frame):
             )
             return
         csv_path = self._csv_path_var.get()
+        session_nr = 1 if self._exp_type_var.get() == "first" else 2
         self.app.start_experiment(
             pid=pid,
+            session_nr=session_nr,
             day_nr=self._day_nr_var.get(),
             test_date=self._date_var.get(),
             locations=locations,
@@ -531,6 +540,16 @@ class TrialFrame(tk.Frame):
             top_row, text="", font=FONT_SMALL, fg="#7f8c8d", bg=PANEL_BG
         )
         self._trial_num_label.pack(side=tk.RIGHT)
+
+        # Body part (location) display — prominent
+        self._location_label = tk.Label(
+            trial_panel,
+            text="",
+            font=FONT_LOCATION,
+            fg=PRIMARY,
+            bg=PANEL_BG,
+        )
+        self._location_label.pack(pady=(4, 0))
 
         # Distance display
         dist_container = tk.Frame(trial_panel, bg=PANEL_BG)
@@ -641,6 +660,9 @@ class TrialFrame(tk.Frame):
         current = self.app._current_location_idx
         loc_progress = f"Location {current}/{total} | Participant: {pid}"
         self._header_sub.config(text=loc_progress)
+
+        # Prominent body part display
+        self._location_label.config(text=f"Body part: {loc}")
 
         if is_ct:
             self._trial_type_label.config(
@@ -1059,10 +1081,6 @@ class AllResultsFrame(tk.Frame):
                 font=FONT_SMALL, fg=SUCCESS, bg=csv_bg,
                 anchor="w", wraplength=700, padx=PAD, pady=8,
             ).pack(fill=tk.X)
-
-        # ---------- per-location detail panels ----------
-        for s in self.sessions:
-            self._build_location_panel(inner, s)
 
         # ---------- action buttons ----------
         btn_panel = tk.Frame(inner, bg=BG)
