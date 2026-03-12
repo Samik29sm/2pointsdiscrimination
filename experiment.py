@@ -12,9 +12,12 @@ Algorithm (staircase / method of limits):
     in these trials only a single calipers point is applied.
 """
 
+import bisect
 import random
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+
+from locations import BODY_LOCATIONS
 
 
 class Trial:
@@ -116,8 +119,16 @@ class ExperimentSession:
         hypothetical future configuration changes.
         """
         n = len(self.distances)
-        # Average threshold estimate: the median index in the distance list.
-        avg_threshold_idx = n // 2
+        # Use the literature-based average threshold for this location when
+        # available (see locations.py), otherwise fall back to the median index.
+        loc_data = BODY_LOCATIONS.get(self.location, {})
+        avg_threshold_mm = loc_data.get("average_threshold")
+        if avg_threshold_mm is not None and self.distances:
+            # bisect_left returns an index in [0, n]; clamp to a valid index.
+            idx = bisect.bisect_left(self.distances, float(avg_threshold_mm))
+            avg_threshold_idx = min(idx, n - 1)
+        else:
+            avg_threshold_idx = n // 2
         # Approximate trial count: steps from the max distance down to the
         # estimated threshold + REVERSAL_THRESHOLD reversals × ~2 trials each.
         steps_down = max((n - 1) - avg_threshold_idx, 1)
