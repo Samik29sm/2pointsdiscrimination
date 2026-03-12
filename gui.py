@@ -265,7 +265,7 @@ class SetupFrame(tk.Frame):
         exp_radio_frame.pack(fill=tk.X, padx=PAD, pady=(0, PAD))
         tk.Radiobutton(
             exp_radio_frame,
-            text="1st 2PD experiment  (default: Day 1)",
+            text="1st 2PD experiment (default: Day 1)",
             variable=self._exp_type_var,
             value="first",
             bg=PANEL_BG,
@@ -274,7 +274,7 @@ class SetupFrame(tk.Frame):
         ).pack(anchor="w")
         tk.Radiobutton(
             exp_radio_frame,
-            text="2nd 2PD experiment  (default: Day 8)",
+            text="2nd 2PD experiment (default: Day 8)",
             variable=self._exp_type_var,
             value="second",
             bg=PANEL_BG,
@@ -639,7 +639,7 @@ class TrialFrame(tk.Frame):
         )
         total = len(self.app._location_queue)
         current = self.app._current_location_idx
-        loc_progress = f"Location {current}/{total}  |  Participant: {pid}"
+        loc_progress = f"Location {current}/{total} | Participant: {pid}"
         self._header_sub.config(text=loc_progress)
 
         if is_ct:
