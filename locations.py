@@ -10,7 +10,7 @@ BODY_LOCATIONS = {
     "Fingertip of index finger": {
         "distances": [1, 2, 3, 4, 5, 6, 8, 10],
         "description": "Center around fingertip, middle of the finger",
-        "average_threshold": 3,  # mm – typical fingertip threshold (Weinstein 1968)
+        "average_threshold": 1,  # mm – typical fingertip threshold (Weinstein 1968)
     },
     "Palm": {
         "distances": [1, 2, 3, 4, 5, 6, 8, 10, 12, 14, 18, 20, 22, 26, 30, 35, 40],
