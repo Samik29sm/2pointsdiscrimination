@@ -32,6 +32,21 @@ class DataManager:
     # Public API
     # ------------------------------------------------------------------
 
+    def get_next_testing_day_nr(self, participant_id: str) -> int:
+        """Return the next testing day number for a participant.
+
+        Scans the data directory for existing CSV files whose names start
+        with the sanitised participant ID and returns the count + 1.
+        """
+        pid = "".join(c if c.isalnum() or c in "-_" else "_" for c in participant_id)
+        if not os.path.isdir(self.data_dir):
+            return 1
+        existing = [
+            f for f in os.listdir(self.data_dir)
+            if f.startswith(pid + "_") and f.endswith(".csv")
+        ]
+        return len(existing) + 1
+
     def export_csv(
         self,
         session: ExperimentSession,
@@ -42,6 +57,10 @@ class DataManager:
             filepath = self._make_filepath(session, "csv")
 
         fieldnames = [
+            "participant_id",
+            "test_date",
+            "testing_day_nr",
+            "location",
             "trial_number",
             "trial_type",
             "distance_mm",
@@ -55,7 +74,12 @@ class DataManager:
             writer = csv.DictWriter(fh, fieldnames=fieldnames)
             writer.writeheader()
             for trial in session.trials:
-                writer.writerow(trial.to_dict())
+                row = trial.to_dict()
+                row["participant_id"] = session.participant_id
+                row["test_date"] = session.test_date
+                row["testing_day_nr"] = session.testing_day_nr
+                row["location"] = session.location
+                writer.writerow(row)
 
         return filepath
 

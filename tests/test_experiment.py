@@ -1,6 +1,10 @@
 """Unit tests for experiment.py logic."""
 
+import os
+import tempfile
+
 import pytest
+from data_manager import DataManager
 from experiment import ExperimentSession, Trial
 
 
@@ -205,8 +209,8 @@ class TestSummary:
     def test_summary_contains_expected_keys(self):
         s = ExperimentSession("P01", "Fingertip", [2, 4, 6, 8, 10])
         summary = s.get_summary()
-        for key in ("participant_id", "location", "threshold_mm",
-                    "total_trials", "experimental_trials",
+        for key in ("participant_id", "location", "test_date", "testing_day_nr",
+                    "threshold_mm", "total_trials", "experimental_trials",
                     "control_trials", "control_trials_correct",
                     "responses_by_distance"):
             assert key in summary
@@ -223,3 +227,77 @@ class TestSummary:
         summary = s.get_summary()
         assert summary["experimental_trials"] == 2
         assert summary["control_trials"] == 1
+
+
+# ---------------------------------------------------------------------------
+# ExperimentSession – test_date and testing_day_nr
+# ---------------------------------------------------------------------------
+
+class TestSessionMetadata:
+    def test_default_testing_day_nr(self):
+        s = ExperimentSession("P01", "Fingertip", [2, 4])
+        assert s.testing_day_nr == 1
+
+    def test_custom_testing_day_nr(self):
+        s = ExperimentSession("P01", "Fingertip", [2, 4], testing_day_nr=3)
+        assert s.testing_day_nr == 3
+
+    def test_default_test_date_is_today(self):
+        from datetime import date
+        s = ExperimentSession("P01", "Fingertip", [2, 4])
+        assert s.test_date == date.today().isoformat()
+
+    def test_custom_test_date(self):
+        s = ExperimentSession("P01", "Fingertip", [2, 4], test_date="2025-01-15")
+        assert s.test_date == "2025-01-15"
+
+    def test_summary_includes_date_and_day_nr(self):
+        s = ExperimentSession("P01", "Fingertip", [2, 4], testing_day_nr=2, test_date="2025-06-01")
+        summary = s.get_summary()
+        assert summary["test_date"] == "2025-06-01"
+        assert summary["testing_day_nr"] == 2
+
+
+# ---------------------------------------------------------------------------
+# DataManager – get_next_testing_day_nr
+# ---------------------------------------------------------------------------
+
+class TestDataManagerDayNr:
+    def test_returns_1_for_new_participant(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            dm = DataManager(data_dir=tmpdir)
+            assert dm.get_next_testing_day_nr("NewParticipant") == 1
+
+    def test_increments_with_existing_files(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            dm = DataManager(data_dir=tmpdir)
+            # Create two fake CSV files for participant P99
+            open(os.path.join(tmpdir, "P99_Fingertip_20250101.csv"), "w").close()
+            open(os.path.join(tmpdir, "P99_Palm_20250102.csv"), "w").close()
+            assert dm.get_next_testing_day_nr("P99") == 3
+
+    def test_ignores_non_matching_files(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            dm = DataManager(data_dir=tmpdir)
+            # File for a different participant should not count
+            open(os.path.join(tmpdir, "OTHER_Fingertip_20250101.csv"), "w").close()
+            assert dm.get_next_testing_day_nr("P99") == 1
+
+    def test_export_csv_includes_metadata_columns(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            dm = DataManager(data_dir=tmpdir)
+            s = ExperimentSession("P01", "Fingertip", [4, 6, 8], testing_day_nr=2, test_date="2025-06-01")
+            s._ct_trial_numbers = set()
+            s._pending_ct = 0
+            s.record_response("2")
+            filepath = os.path.join(tmpdir, "test_out.csv")
+            dm.export_csv(s, filepath)
+            import csv
+            with open(filepath, newline="", encoding="utf-8") as fh:
+                reader = csv.DictReader(fh)
+                rows = list(reader)
+            assert len(rows) == 1
+            assert rows[0]["participant_id"] == "P01"
+            assert rows[0]["test_date"] == "2025-06-01"
+            assert rows[0]["testing_day_nr"] == "2"
+            assert rows[0]["location"] == "Fingertip"
