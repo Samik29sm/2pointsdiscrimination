@@ -296,6 +296,79 @@ class TestControlTrials:
 
 
 # ---------------------------------------------------------------------------
+# ExperimentSession – extra control trial on demand
+# ---------------------------------------------------------------------------
+
+class TestRequestExtraControlTrial:
+    def _session(self):
+        s = ExperimentSession("P01", "Fingertip", [2, 4, 6, 8, 10])
+        s._ct_trial_numbers = set()
+        s._pending_ct = 0
+        return s
+
+    def test_increments_pending_ct(self):
+        s = self._session()
+        assert s._pending_ct == 0
+        s.request_extra_control_trial()
+        assert s._pending_ct == 1
+
+    def test_multiple_calls_accumulate(self):
+        s = self._session()
+        s.request_extra_control_trial()
+        s.request_extra_control_trial()
+        assert s._pending_ct == 2
+
+    def test_makes_next_trial_control(self):
+        s = self._session()
+        s.request_extra_control_trial()
+        assert s.is_next_trial_control
+
+    def test_extra_ct_recorded_as_control(self):
+        s = self._session()
+        s.request_extra_control_trial()
+        s.record_response("1")
+        assert s.trials[0].trial_type == "control"
+        assert s._pending_ct == 0
+
+    def test_staircase_position_unchanged_after_extra_ct(self):
+        """Responding to an extra CT does not move the staircase pointer."""
+        s = self._session()
+        s.record_response("2")          # 10 → 8
+        dist_before = s.current_distance
+        s.request_extra_control_trial()
+        s.record_response("1")          # CT response
+        assert s.current_distance == dist_before
+
+    def test_session_waits_for_extra_ct_before_ending(self):
+        """Session should not end until the extra CT is completed."""
+        # Use a session with no CTs initially; hit threshold, then request extra CT
+        s = ExperimentSession("P01", "Loc", [5.0])
+        s._ct_trial_numbers = set()
+        s._pending_ct = 0
+        s.record_response("1")  # rev 1
+        s.record_response("1")  # rev 2
+        # Hit threshold on the 3rd reversal (done immediately, no CTs pending)
+        s.record_response("1")  # rev 3 → threshold, done immediately
+        assert s.done
+
+        # Verify that requesting an extra CT mid-session (before threshold)
+        # causes the session to wait for that CT.
+        s2 = ExperimentSession("P01", "Loc", [5.0])
+        s2._ct_trial_numbers = set()
+        s2._pending_ct = 0
+        s2.record_response("1")  # rev 1
+        s2.record_response("1")  # rev 2
+        # Request an extra CT — makes trial 3 a CT instead of experimental
+        s2.request_extra_control_trial()
+        assert s2.is_next_trial_control
+        s2.record_response("1")  # complete the extra CT
+        assert s2._pending_ct == 0
+        # Now the staircase resumes; trigger final reversal
+        s2.record_response("1")  # rev 3 → threshold, all CTs done
+        assert s2.done
+
+
+# ---------------------------------------------------------------------------
 # ExperimentSession – summary
 # ---------------------------------------------------------------------------
 

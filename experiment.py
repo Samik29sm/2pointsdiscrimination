@@ -228,6 +228,16 @@ class ExperimentSession:
             self.trials.append(trial)
             self._update_staircase(distance, response)
 
+    def request_extra_control_trial(self) -> None:
+        """Schedule an additional control trial at the next trial position.
+
+        The experimenter can call this at any time (between trials) to insert
+        an extra control trial immediately before the next experimental trial.
+        The session will not end until all pending control trials are completed.
+        """
+        self._pending_ct += 1
+        self._ct_trial_numbers.add(self.current_trial_number)
+
     def get_summary(self) -> Dict[str, Any]:
         """Return a dict summarising the session results."""
         experimental = [t for t in self.trials if t.trial_type == "experimental"]
