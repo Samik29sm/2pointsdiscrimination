@@ -100,15 +100,42 @@ class ExperimentSession:
     # ------------------------------------------------------------------
 
     def _generate_ct_positions(self) -> set:
-        """Choose random trial numbers for control trials.
+        """Choose semi-random trial numbers for control trials.
 
         CT trials are placed after the first 2 experimental trials so the
         participant never starts with a control trial.
+
+        The staircase length is estimated from the average threshold (median
+        of the distance list).  The two CT slots are drawn from opposite
+        halves of the expected trial range so they are spread out and cannot
+        both fall consecutively at the end of the session.
+
+        Note: ``max_pool`` is always at least 10, giving a pool of at least
+        8 entries ([3..10]), which is always larger than NUM_CONTROL_TRIALS.
+        The small-pool fallback below is therefore a safety net for
+        hypothetical future configuration changes.
         """
-        max_pool = max(len(self.distances) * 3 + 5, 10)
-        pool = list(range(3, max_pool))
-        positions = random.sample(pool, min(self.NUM_CONTROL_TRIALS, len(pool)))
-        return set(positions)
+        n = len(self.distances)
+        # Average threshold estimate: the median index in the distance list.
+        avg_threshold_idx = n // 2
+        # Approximate trial count: steps from the max distance down to the
+        # estimated threshold + REVERSAL_THRESHOLD reversals × ~2 trials each.
+        steps_down = max((n - 1) - avg_threshold_idx, 1)
+        estimated_total = steps_down + self.REVERSAL_THRESHOLD * 2 + 3
+        max_pool = max(estimated_total, 10)
+
+        # Split the pool [3 .. max_pool] into two halves and draw one CT from
+        # each half so the two positions are always separated.
+        pool = list(range(3, max_pool + 1))
+        if len(pool) < self.NUM_CONTROL_TRIALS:
+            # Pool too small to guarantee separation; fall back to a simple
+            # sample of all available positions.
+            return set(random.sample(pool, len(pool)))
+
+        mid = len(pool) // 2
+        pos1 = random.choice(pool[:mid])
+        pos2 = random.choice(pool[mid:])
+        return {pos1, pos2}
 
     # ------------------------------------------------------------------
     # Properties

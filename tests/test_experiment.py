@@ -228,6 +228,62 @@ class TestControlTrials:
             s.record_response("1")
         assert s.done
 
+    def test_ct_positions_never_in_first_two_trials(self):
+        """CT positions must always be >= 3 (never trial 1 or 2)."""
+        for _ in range(30):
+            s = ExperimentSession("P01", "Fingertip", [2, 4, 6, 8, 10])
+            assert all(p >= 3 for p in s._ct_trial_numbers)
+
+    def test_ct_positions_are_distinct(self):
+        """The two CT positions must be different trial numbers."""
+        for _ in range(30):
+            s = ExperimentSession("P01", "Fingertip", [2, 4, 6, 8, 10])
+            positions = list(s._ct_trial_numbers)
+            assert len(positions) == 2
+            assert positions[0] != positions[1]
+
+    def test_ct_positions_spread_across_halves(self):
+        """CT positions should come from different halves of the estimated range.
+
+        With distances [2,4,6,8,10] (n=5):
+          avg_threshold_idx = 2, steps_down = 2
+          estimated_total = 2 + 3*2 + 3 = 11, max_pool = 11
+          pool = [3..11], mid index = 4, so first half = [3,4,5,6], second = [7,8,9,10,11]
+        After sorting the two positions the smaller one must come from the first
+        half and the larger from the second half (since first_half < second_half
+        by construction).
+        """
+        n = 5
+        avg_threshold_idx = n // 2          # 2
+        steps_down = max((n - 1) - avg_threshold_idx, 1)  # 2
+        estimated_total = steps_down + ExperimentSession.REVERSAL_THRESHOLD * 2 + 3  # 11
+        max_pool = max(estimated_total, 10)  # 11
+        pool = list(range(3, max_pool + 1))
+        mid = len(pool) // 2
+        first_half = set(pool[:mid])
+        second_half = set(pool[mid:])
+
+        for _ in range(30):
+            s = ExperimentSession("P01", "Fingertip", [2, 4, 6, 8, 10])
+            positions = s._ct_trial_numbers
+            assert len(positions) == 2
+            pos_list = sorted(positions)
+            # After sorting, the smaller value must be from the first half and
+            # the larger from the second half (the halves are disjoint ranges).
+            assert pos_list[0] in first_half, f"{pos_list[0]} not in first half {first_half}"
+            assert pos_list[1] in second_half, f"{pos_list[1]} not in second half {second_half}"
+
+    def test_ct_positions_within_estimated_range(self):
+        """Both CT positions should fall within [3 .. max_pool]."""
+        for _ in range(30):
+            s = ExperimentSession("P01", "Palm", [1, 5, 10, 15, 20, 25, 30, 40])
+            n = len(s.distances)
+            avg_threshold_idx = n // 2
+            steps_down = max((n - 1) - avg_threshold_idx, 1)
+            estimated_total = steps_down + ExperimentSession.REVERSAL_THRESHOLD * 2 + 3
+            max_pool = max(estimated_total, 10)
+            assert all(3 <= p <= max_pool for p in s._ct_trial_numbers)
+
 
 # ---------------------------------------------------------------------------
 # ExperimentSession – summary

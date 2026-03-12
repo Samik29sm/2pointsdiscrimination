@@ -109,7 +109,15 @@ class App(tk.Tk):
     def show_trial(self, session: ExperimentSession, csv_save_path: str) -> None:
         self.session = session
         self.csv_save_path = csv_save_path
-        self._replace(TrialFrame(self._container, self, session, csv_save_path))
+        # Destroy the current frame *before* constructing the new TrialFrame so
+        # that TrialFrame.destroy()'s unbind_all() does not remove the keyboard
+        # bindings that the incoming TrialFrame registers in its _build() call.
+        if self._current_frame is not None:
+            self._current_frame.destroy()
+            self._current_frame = None
+        frame = TrialFrame(self._container, self, session, csv_save_path)
+        self._current_frame = frame
+        frame.pack(fill=tk.BOTH, expand=True)
 
     def show_results(self, session: ExperimentSession, csv_save_path: str) -> None:
         self._replace(ResultsFrame(self._container, self, session, csv_save_path))
