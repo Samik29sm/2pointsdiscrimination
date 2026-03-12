@@ -460,7 +460,6 @@ class SetupFrame(tk.Frame):
             return
         BODY_LOCATIONS[name] = {
             "distances": sorted(dists),
-            "typical_threshold": "N/A",
             "description": "Custom location",
         }
         # Rebuild checkboxes so the new location appears (checked by default)
@@ -506,6 +505,15 @@ class TrialFrame(tk.Frame):
         self._build()
         self._refresh()
 
+    def destroy(self) -> None:
+        """Unbind keyboard shortcuts before destroying this frame."""
+        try:
+            self.unbind_all("<Return>")
+            self.unbind_all("<space>")
+        except tk.TclError:
+            pass
+        super().destroy()
+
     def _build(self) -> None:
         # ---------- header bar ----------
         self._header = tk.Frame(self, bg=PRIMARY, padx=PAD, pady=8)
@@ -550,6 +558,16 @@ class TrialFrame(tk.Frame):
             bg=PANEL_BG,
         )
         self._location_label.pack(pady=(4, 0))
+
+        # Location description — shown below the body part name
+        self._location_desc_label = tk.Label(
+            trial_panel,
+            text="",
+            font=FONT_BODY,
+            fg="#555",
+            bg=PANEL_BG,
+        )
+        self._location_desc_label.pack(pady=(2, 0))
 
         # Distance display
         dist_container = tk.Frame(trial_panel, bg=PANEL_BG)
@@ -602,7 +620,7 @@ class TrialFrame(tk.Frame):
         tk.Frame(trial_panel, bg=BORDER, height=1).pack(fill=tk.X, padx=PAD, pady=8)
 
         # Response buttons
-        resp_label = _make_label(trial_panel, "Participant reports:", font=FONT_SUBHEAD)
+        resp_label = _make_label(trial_panel, "Participant reports: (Space = 1 pt  |  Enter = 2 pts)", font=FONT_SUBHEAD)
         resp_label.pack(pady=(0, 8))
 
         btn_row = tk.Frame(trial_panel, bg=PANEL_BG)
@@ -625,6 +643,16 @@ class TrialFrame(tk.Frame):
             font=("Helvetica", 16, "bold"),
             pady=14, padx=30,
         ).pack(side=tk.LEFT, padx=12)
+
+        # Keyboard shortcuts: Enter = 2 points, Space = 1 point
+        # Skip if the custom-distance entry currently has keyboard focus.
+        def _kb_respond(response: str) -> None:
+            if str(self.focus_get()) == str(self._custom_entry):
+                return
+            self._respond(response)
+
+        self.bind_all("<Return>", lambda _e: _kb_respond("2"))
+        self.bind_all("<space>", lambda _e: _kb_respond("1"))
 
         # ---------- footer ----------
         footer = tk.Frame(self, bg=BG, padx=PAD * 2, pady=6)
@@ -663,6 +691,8 @@ class TrialFrame(tk.Frame):
 
         # Prominent body part display
         self._location_label.config(text=f"Body part: {loc}")
+        desc = BODY_LOCATIONS.get(loc, {}).get("description", "")
+        self._location_desc_label.config(text=desc)
 
         if is_ct:
             self._trial_type_label.config(
