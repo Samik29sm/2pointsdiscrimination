@@ -23,6 +23,16 @@ TRIAL_FIELDNAMES: List[str] = [
     "timestamp",
 ]
 
+# Columns written per-location in the final structured CSV
+LOCATION_TRIAL_FIELDNAMES: List[str] = [
+    "trial_number",
+    "trial_type",
+    "distance_mm",
+    "stimulus_applied",
+    "response",
+    "correct",
+]
+
 
 class DataManager:
     """Saves and exports experiment data to the local filesystem."""
@@ -48,13 +58,13 @@ class DataManager:
     # ------------------------------------------------------------------
 
     def make_experiment_filepath(
-        self, participant_id: str, day_nr: int, test_date: str
+        self, participant_id: str, session_nr: int, day_nr: int, test_date: str
     ) -> str:
         """Return an auto-generated CSV path for a multi-location experiment."""
         pid = "".join(
             c if c.isalnum() or c in "-_" else "_" for c in participant_id
         )
-        return os.path.join(self.data_dir, f"{pid}_day{day_nr}_{test_date}.csv")
+        return os.path.join(self.data_dir, f"{pid}_session{session_nr}_day{day_nr}_{test_date}.csv")
 
     def init_csv(self, filepath: str) -> None:
         """Create the CSV file with trial headers at experiment start."""
@@ -80,16 +90,20 @@ class DataManager:
     def write_final_csv(
         self, sessions: List[ExperimentSession], filepath: str
     ) -> str:
-        """Rewrite CSV with a summary section followed by one section per location.
+        """Rewrite CSV with experiment info, summary, then one section per location.
 
         Structure
         ---------
+        EXPERIMENT INFO
+        participant_id, test_date, experiment_session, testing_day_nr
+        <one row>
+        <blank line>
         SUMMARY
-        participant_id, location, threshold_mm, test_date, testing_day_nr
+        location, threshold_mm, successful_CT
         <one row per session>
         <blank line>
         LOCATION: <name>
-        <trial field headers>
+        trial_number, trial_type, distance_mm, stimulus_applied, response, correct
         <one row per trial>
         <blank line>
         ... (repeated for each location)
@@ -97,37 +111,41 @@ class DataManager:
         with open(filepath, "w", newline="", encoding="utf-8") as fh:
             writer = csv.writer(fh)
 
+            # --- Experiment info section ---
+            writer.writerow(["EXPERIMENT INFO"])
+            writer.writerow([
+                "participant_id", "test_date", "experiment_session", "testing_day_nr"
+            ])
+            if sessions:
+                s0 = sessions[0]
+                writer.writerow([
+                    s0.participant_id,
+                    s0.test_date,
+                    s0.experiment_session,
+                    s0.testing_day_nr,
+                ])
+            writer.writerow([])  # blank separator
+
             # --- Summary section ---
             writer.writerow(["SUMMARY"])
-            summary_fields = [
-                "participant_id",
-                "location",
-                "threshold_mm",
-                "test_date",
-                "testing_day_nr",
-            ]
-            writer.writerow(summary_fields)
+            writer.writerow(["location", "threshold_mm", "successful_CT"])
             for s in sessions:
+                control = [t for t in s.trials if t.trial_type == "control"]
+                ct_correct = sum(1 for t in control if t.response == "1")
                 writer.writerow([
-                    s.participant_id,
                     s.location,
                     s.threshold if s.threshold is not None else "N/A",
-                    s.test_date,
-                    s.testing_day_nr,
+                    ct_correct,
                 ])
             writer.writerow([])  # blank separator
 
             # --- Per-location sections ---
             for s in sessions:
                 writer.writerow([f"LOCATION: {s.location}"])
-                writer.writerow(TRIAL_FIELDNAMES)
+                writer.writerow(LOCATION_TRIAL_FIELDNAMES)
                 for trial in s.trials:
                     row = trial.to_dict()
-                    row["participant_id"] = s.participant_id
-                    row["test_date"] = s.test_date
-                    row["testing_day_nr"] = s.testing_day_nr
-                    row["location"] = s.location
-                    writer.writerow([row.get(f, "") for f in TRIAL_FIELDNAMES])
+                    writer.writerow([row.get(f, "") for f in LOCATION_TRIAL_FIELDNAMES])
                 writer.writerow([])  # blank separator
 
         return filepath
