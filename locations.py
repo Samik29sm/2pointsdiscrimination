@@ -7,7 +7,7 @@ across the expected trial range.
 """
 
 BODY_LOCATIONS = {
-    "Fingertip of index finger": {
+    "Index finger": {
         "distances": [1, 2, 3, 4, 5, 6, 8, 10],
         "description": "Center around fingertip, middle of the finger",
         "average_threshold": 1,  # mm – typical fingertip threshold (Weinstein 1968)
@@ -17,7 +17,7 @@ BODY_LOCATIONS = {
         "description": "Center of thenar hypothenar axis (middle between thumb and pinky pad, deepest point of hand",
         "average_threshold": 12,  # mm – typical palm threshold
     },
-    "Ventral forearm": {
+    "Forearm": {
         "distances": [2, 4, 6, 8, 10, 12, 14, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 39, 42, 45, 48, 52, 55, 60, 70],
         "description": "Midpoint between elbow and wrist",
         "average_threshold": 35,  # mm – typical ventral forearm threshold
@@ -32,7 +32,7 @@ BODY_LOCATIONS = {
         "description": "Medial side of the leg, right below and side to tiberial tuberosity (bony prominence at sides to knee)",
         "average_threshold": 36,  # mm – typical lower-leg threshold
     },
-    "Foot sole": {
+    "Foot dorsum": {
         "distances": [2, 4, 6, 8, 10, 12, 14, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 45, 48, 51, 55, 60],
         "description": "Center of the medial longitudinal arch (curved inner arch of the foot running from heel to ball along inside edge)",
         "average_threshold": 22,  # mm – typical foot-sole threshold
