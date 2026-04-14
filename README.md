@@ -1,30 +1,22 @@
 # Two-Point Discrimination Experiment Tool
 
-A clean, minimal desktop application for conducting and analysing **two-point discrimination (2PD)** experiments in sensory-perception research.
-
----
-
-## Screenshots
-
-| Setup | Trial | Results |
-|---|---|---|
-| ![Setup screen](https://github.com/user-attachments/assets/d31b3dba-7cf4-4425-90c6-c20e98757619) | ![Trial screen](https://github.com/user-attachments/assets/1ee92d38-e9bf-424a-b4ec-c8b5250d4a69) | ![Results screen](https://github.com/user-attachments/assets/6cf1180f-1001-4c5c-ab77-0694e49b4eab) |
+A minimal desktop application for conducting and analysing **two-point discrimination (2PD)** experiments in sensory-perception research.
 
 ---
 
 ## Features
 
-- **Eight built-in body locations** (Fingertip, Palm, Forearm, Upper Arm, Back, Lip, Forehead, Cheek) each with typical 2PD distances pre-loaded.
+- **Six built-in body locations** (Fingertip of index finger, Palm, Ventral forearm, Lower back, Lower leg, Foot sole) each with typical 2PD distances pre-loaded.
 - **Custom locations and distances** – add a new body site or extra distance on the fly.
 - **Staircase algorithm (Method of Limits)**  
-  - Starts at the highest distance and steps down until the participant reports 1 point.  
+  - Starts at the highest distance and steps down until the participant reports 1.  
   - Reverses direction at each boundary.  
   - Automatically stops when the same distance accumulates **3 reversals** (3 × "1 point").  
   - Reports the **threshold** as the next-higher distance (the last reliable 2-point distance).
-- **2 Control Trials (CT) per session** – single-point stimuli inserted at random positions to check for response bias.
+- **2 Control Trials (CT) per session** – single-point stimuli inserted at random positions to check for response bias with possibility to add more control trials if needed.
 - **Distance override** – the experimenter can type a custom distance for any individual trial.
 - **Results screen** with session summary, per-distance response table, and an interactive staircase graph (orange = 1 pt, green = 2 pts, dashed red = threshold).
-- **Export** to CSV or JSON with one click.
+- **Export** to CSV.
 
 ---
 
@@ -83,14 +75,5 @@ python -m pytest tests/ -v
 1. **Setup** – Enter a Participant ID, choose a body location from the dropdown (or add a custom one), review/add test distances, then click **Start Experiment**.
 2. **Trial** – The app shows the distance to apply. Present the calipers to the participant, then click **1 Point** or **2 Points** to record their response. Check *Override distance* to test a different distance than suggested.
 3. **Control Trials** – Two trials appear at random positions with the instruction to apply only one point. These verify the participant is responding honestly.
-4. **Results** – When 3 reversals accumulate at the same distance the experiment ends automatically. The threshold, a per-distance table, and a staircase graph are displayed. Use **Export CSV** or **Export JSON** to save the data. Click **New Experiment** to start again.
+4. **Results** – When 3 reversals accumulate at the same distance the experiment ends automatically and change location. When all locations are finished, results are saved in a CSV file.
 
----
-
-## Suggested Improvements
-
-- **Randomised stimulus distances** – shuffle the distance sequence or use an adaptive Bayesian estimator (e.g. QUEST).
-- **Repeat-trial button** – re-test the current distance if the experimenter suspects a false response.
-- **Inter-trial interval timer** – enforce a minimum pause between trials to avoid habituation.
-- **Multi-location session** – chain several body locations in one run, with a combined report at the end.
-- **Normative data overlay** – display published reference thresholds on the results graph.
